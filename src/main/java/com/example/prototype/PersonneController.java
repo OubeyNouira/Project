@@ -3,7 +3,8 @@ import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-//import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Optional;
@@ -15,14 +16,14 @@ public class PersonneController {
     private final PersonneRepository personneRepository;
     private final DepartmentRepository departmentRepository;
     private final VacationRepository vacationRepository;
-    //private final PasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
     @Autowired
-    public PersonneController(PersonneRepository personneRepository, DepartmentRepository departmentRepository, VacationRepository vacationRepository/*, PasswordEncoder passwordEncoder*/) {
+    public PersonneController(PersonneRepository personneRepository, DepartmentRepository departmentRepository, VacationRepository vacationRepository, PasswordEncoder passwordEncoder) {
         this.personneRepository = personneRepository;
         this.departmentRepository=departmentRepository;
         this.vacationRepository = vacationRepository;
-        /*this.passwordEncoder = passwordEncoder;*/
+        this.passwordEncoder = passwordEncoder;
 
 
     }
@@ -52,6 +53,7 @@ public class PersonneController {
         return personneRepository.findChefPolesByUserType("chefpole");
     }
 
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @GetMapping("/employee")
     public List<Employee> getAllEmployees() {
         return personneRepository.findEmployeesByUserType("employee");
@@ -60,6 +62,8 @@ public class PersonneController {
     public List<SuperAdmin> getAllSuperAdmins() {
         return personneRepository.findSuperAdminsByUserType("superadmin");}
     //PosteMappings
+
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @PostMapping("/employee/{employeeId}/vacation")
     public ResponseEntity<Vacation> createVacationForEmployee(@PathVariable int employeeId, @RequestBody Vacation vacation) {
         Optional<Personne> employeeOptional = personneRepository.findById(employeeId);
@@ -81,6 +85,7 @@ public class PersonneController {
         }
     }
 
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody Employee.LoginRequest loginRequest) {
         String email = loginRequest.getEmail();
@@ -103,6 +108,7 @@ public class PersonneController {
 
     // Existing mappings...
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/chefpole/{depid}")
     public ResponseEntity<ChefPole> addChefPoleToDepartment(@RequestBody ChefPole chefPole, @PathVariable int depid) {
         Optional<Department> departmentOptional = departmentRepository.findById(depid);
@@ -115,10 +121,29 @@ public class PersonneController {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
     }
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/departments")
     public ResponseEntity<Department> createDepartment(@RequestBody Department department) {
         Department createdDepartment = departmentRepository.save(department);
         return new ResponseEntity<>(createdDepartment, HttpStatus.CREATED);
+    }
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @PostMapping("/employee/{depid}")
+    public ResponseEntity<Employee> addEmployeeToDepartment(@RequestBody Employee employee, @PathVariable int depid) {
+        Optional<Department> departmentOptional = departmentRepository.findById(depid);
+        if (departmentOptional.isPresent()) {
+            Department department = departmentOptional.get();
+            employee.setDepartment(department);
+
+            // Encode the employee's password using the passwordEncoder
+            String encodedPassword = passwordEncoder.encode(employee.getMotDePasse());
+            employee.setMotDePasse(encodedPassword);
+
+            Employee savedEmployee = personneRepository.save(employee);
+            return new ResponseEntity<>(savedEmployee, HttpStatus.CREATED);
+        } else {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
     }
 //    @PostMapping("/employee/{depid}")
 //    public ResponseEntity<Employee> addEmployeeToDepartment(@RequestBody Employee employee, @PathVariable int depid) {
@@ -126,42 +151,29 @@ public class PersonneController {
 //        if (departmentOptional.isPresent()) {
 //            Department department = departmentOptional.get();
 //            employee.setDepartment(department);
-//
-//            // Encode the employee's password using the passwordEncoder
-//            String encodedPassword = passwordEncoder.encode(employee.getMotDePasse());
-//            employee.setMotDePasse(encodedPassword);
-//
 //            Employee savedEmployee = personneRepository.save(employee);
 //            return new ResponseEntity<>(savedEmployee, HttpStatus.CREATED);
 //        } else {
 //            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
 //        }
 //    }
-    @PostMapping("/employee/{depid}")
-    public ResponseEntity<Employee> addEmployeeToDepartment(@RequestBody Employee employee, @PathVariable int depid) {
-        Optional<Department> departmentOptional = departmentRepository.findById(depid);
-        if (departmentOptional.isPresent()) {
-            Department department = departmentOptional.get();
-            employee.setDepartment(department);
-            Employee savedEmployee = personneRepository.save(employee);
-            return new ResponseEntity<>(savedEmployee, HttpStatus.CREATED);
-        } else {
-            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-        }
-    }
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/employee")
     public ResponseEntity<Employee> createEmployee(@RequestBody Employee employee) {
         Employee createdEmployee = personneRepository.save(employee);
         return new ResponseEntity<>(createdEmployee, HttpStatus.CREATED);}
+    @PreAuthorize("hasRole('SuperADMIN')")
     @PostMapping("/superadmin")
     public ResponseEntity<SuperAdmin> createSuperAdmin(@RequestBody SuperAdmin superAdmin) {
         SuperAdmin createdSuperAdmin = personneRepository.save(superAdmin);
         return new ResponseEntity<>(createdSuperAdmin, HttpStatus.CREATED);}
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/chefpole")
     public ResponseEntity<ChefPole> createChefPole(@RequestBody ChefPole chefPole) {
         ChefPole createdChefPole = personneRepository.save(chefPole);
         return new ResponseEntity<>(createdChefPole, HttpStatus.CREATED);}
     //DeleteMappings
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/departments/{depid}")
     public ResponseEntity<Void> deleteDepartment(@PathVariable int depid) {
         Optional<Department> departmentOptional = departmentRepository.findById(depid);
@@ -179,6 +191,7 @@ public class PersonneController {
         }
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/chefpole/{id}")
     public ResponseEntity<Void> deleteChefPole(@PathVariable int id) {
         Optional<Personne> chefPoleOptional = personneRepository.findById(id);
@@ -187,6 +200,7 @@ public class PersonneController {
             return new ResponseEntity<>(HttpStatus.NO_CONTENT);
         } else {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);}}
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/employee/{id}")
     public ResponseEntity<Void> deleteEmployee(@PathVariable int id) {
         Optional<Personne> employeeOptional = personneRepository.findById(id);
@@ -195,13 +209,13 @@ public class PersonneController {
             return new ResponseEntity<>(HttpStatus.NO_CONTENT);
         } else {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);}}
-
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/superadmin/{id}")
     public ResponseEntity<Void> deleteSuperAdmin(@PathVariable int id) {
         personneRepository.deleteById(id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);}
     //PatchMappings
-
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/employees/{employeeId}/department/{newDepid}")
     public ResponseEntity<Employee> updateEmployeeDepartment(@PathVariable int employeeId, @PathVariable int newDepid) {
         Optional<Personne> employeeOptional = personneRepository.findById(employeeId);
@@ -222,6 +236,7 @@ public class PersonneController {
         } else {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }}
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/superadmins/{superAdminId}/department/{newDepid}")
     public ResponseEntity<SuperAdmin> updateSuperAdminDepartment(@PathVariable int superAdminId, @PathVariable int newDepid) {
         Optional<Personne> superAdminOptional = personneRepository.findById(superAdminId);
@@ -243,6 +258,7 @@ public class PersonneController {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
     }
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/departments/{depid}")
     public ResponseEntity<Department> updateDepartment(@PathVariable int depid, @RequestBody Department departmentUpdates) {
         Optional<Department> departmentOptional = departmentRepository.findById(depid);
@@ -260,6 +276,7 @@ public class PersonneController {
             return new ResponseEntity<>(HttpStatus.NOT_FOUND);
         }
     }
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/chefpoles/{chefPoleId}/department/{newDepid}")
     public ResponseEntity<ChefPole> updateChefPoleDepartment(@PathVariable int chefPoleId, @PathVariable int newDepid) {
         Optional<Personne> chefPoleOptional = personneRepository.findById(chefPoleId);
@@ -282,7 +299,7 @@ public class PersonneController {
         }
     }
 
-
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/chefpole/{id}")
     public ChefPole patchChefPole(@PathVariable int id, @RequestBody ChefPole chefPoleUpdates) {
         Optional<Personne> existingPersonneOptional = personneRepository.findById(id);
@@ -328,6 +345,7 @@ public class PersonneController {
             throw new EntityNotFoundException("Personne not found with ID: " + id);
         }
     }
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/employee/{id}")
     public Employee patchEmployee(@PathVariable int id, @RequestBody Employee employeeUpdates) {
         Optional<Personne> existingPersonneOptional = personneRepository.findById(id);
@@ -373,6 +391,7 @@ public class PersonneController {
             throw new EntityNotFoundException("Personne not found with ID: " + id);
         }
     }
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/superadmin/{id}")
     public SuperAdmin patchSuperAdmin(@PathVariable int id, @RequestBody SuperAdmin superAdminUpdates) {
         Optional<Personne> existingPersonneOptional = personneRepository.findById(id);

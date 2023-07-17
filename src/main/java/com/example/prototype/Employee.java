@@ -71,6 +71,10 @@ public class Employee extends Personne {
         vacation.setEmployee(this);
     }
 
+
+    public String getRole() {
+        return "ROLE_USER";
+    }
     public static class LoginRequest {
         private String email;
         private String motDePasse;
